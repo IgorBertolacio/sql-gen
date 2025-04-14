@@ -1,0 +1,4 @@
+python-dotenv==1.1.0 #Trabalhar com o sistema de chaves escondidas
+google-generativeai==0.8.4 #Trabalhar com a API do google 
+Flask==3.1.0 #Configurar servidor da API
+flask-cors==3.0.10
