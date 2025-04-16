@@ -2,7 +2,7 @@
 Script para iniciar o servidor da API.
 """
 
-from src.interfaces.api.gemini_controller import iniciar_servidor
+from src.interfaces.api.llm_controller import iniciar_servidor
 import os
 
 if __name__ == "__main__":

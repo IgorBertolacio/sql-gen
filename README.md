@@ -20,15 +20,20 @@ sql-generate/
 │   │   │   └── __init__.py
 │   │   ├── dto/                                             # Objetos de Transferência de Dados (Data Transfer Objects)
 │   │   │   └── __init__.py
+│   │   ├── utils
+│   │   │   └── llm_response_parser.py                       # Parsear resposta da LLM
 │   │   └── __init__.py
+│   │
 │   │
 │   ├── infrastructure/                                      # Frameworks, drivers e ferramentas
 │   │   ├── repositories/                                    # Implementações de acesso a dados (Repositórios)
 │   │   │   └── __init__.py
 │   │   ├── persistence/                                     # Código relacionado à persistência (ex: banco de dados)
+│   │   │   ├── index_loader.py                              # Carregamento do banco de dados        
 │   │   │   └── __init__.py
 │   │   ├── external_services/                               # Clientes de serviços externos APIs
-            ├─ llm_service.py                                # Serviço para interagir com a LLM
+│   │   │   ├─ embedding_service.py                          # Serviço para fazer embedding do prompt       
+│   │   │   ├─ llm_service.py                                # Serviço para interagir com a LLM
 │   │   │   └── __init__.py
 │   │   ├── config/                                          # Configuração
 │   │   │   ├── api

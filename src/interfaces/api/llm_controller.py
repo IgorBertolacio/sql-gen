@@ -1,6 +1,7 @@
 """
 Controlador para a API REST que gerencia interações com o serviço RAG para geração de SQL.
 """
+
 from flask import Flask, request, jsonify
 from src.infrastructure.config.prompts.sql_instructions import SQLInstructions
 from src.application.services.rag_service import RAGService
