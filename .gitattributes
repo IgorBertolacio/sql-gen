@@ -1,0 +1,1 @@
+vdb/models_text-embedding-004/schema_element_index_norm.index filter=lfs diff=lfs merge=lfs -text
