@@ -14,8 +14,8 @@ class IndexLoader:
     """
     
     # Caminho para os arquivos FAISS e PKL
-    FAISS_INDEX_PATH = os.path.join("vdb", "models_text-embedding-004", "schema_element_index_norm.index")
-    METADATA_PATH = os.path.join("vdb", "models_text-embedding-004", "schema_element_metadata_norm.pkl")
+    FAISS_INDEX_PATH = os.path.join("vdb", "models_text-embedding-004", "table_name_index_norm_v2.index")
+    METADATA_PATH = os.path.join("vdb", "models_text-embedding-004", "table_metadata_for_name_index_v2.pkl")
     
     @staticmethod
     def load_index() -> Tuple[Any, Dict]:

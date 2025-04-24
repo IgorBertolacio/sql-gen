@@ -8,7 +8,7 @@ from src.infrastructure.persistence.index_loader import IndexLoader
 
 class SearchService:
     """
-    Serviço para buscar elementos similares (especificamente tabelas)
+    Serviço para buscar TABELAS similares
     em um índice FAISS usando embeddings de consulta.
     """
 
@@ -31,31 +31,12 @@ class SearchService:
         Returns:
             Uma lista de dicionários. Cada dicionário representa uma tabela de consulta
             e contém uma lista das tabelas mais similares encontradas no índice.
-            Exemplo:
-            [
-                {
-                    "query_table": "cliente",
-                    "matches": [
-                        {"table_name": "public.clientes", "similarity_percentage": 95.2},
-                        {"table_name": "stage.stg_clientes", "similarity_percentage": 88.1},
-                        # ... até k correspondências de TABELAS
-                    ]
-                },
-                {
-                    "query_table": "pedido",
-                    "matches": [
-                        {"table_name": "comercial.pedidos_venda", "similarity_percentage": 92.5},
-                        {"table_name": "public.pedidos", "similarity_percentage": 90.0},
-                    ] # Pode ter menos de k se não encontrar ou filtrar
-                },
-                # ... para cada tabela na consulta original
-            ]
-            Retorna uma lista vazia se ocorrer um erro ou nenhuma entrada for processada.
         """
         results = []
         faiss_index = None
         metadata_list = None
 
+        # Validação de entrada
         print(f"SearchService: Recebido {len(query_table_names)} tabelas de consulta para busca.")
         if query_embeddings.size == 0 or len(query_table_names) == 0:
              print("SearchService: Embeddings de consulta ou nomes de tabelas vazios. Retornando lista vazia.")
@@ -76,7 +57,6 @@ class SearchService:
 
             if faiss_index.ntotal != len(metadata_list):
                 print(f"SearchService ERROR: Inconsistência carregada - Índice ({faiss_index.ntotal}) != Metadados ({len(metadata_list)}).")
-                # Considerar lançar uma exceção ou retornar erro mais explícito
                 return []
 
             # 2. Verificar Dimensão do Embedding da Consulta
@@ -86,24 +66,17 @@ class SearchService:
                 print(f"SearchService ERROR: Dimensão do embedding da consulta ({query_dim}) não corresponde à dimensão do índice ({index_dim}).")
                 return []
 
-            # 3. Garantir Normalização L2 dos Embeddings da Consulta (IMPORTANTE!)
-            # O script de criação normaliza antes de adicionar ao IndexFlatL2.
-            # A busca com L2 funciona melhor (simula cosseno) se ambos os vetores (índice e consulta) estiverem normalizados.
-            print("SearchService: Normalizando embeddings de consulta (L2 norm)...")
+            # 3. Garantir Normalização L2 dos Embeddings da Consulta
+            print("SearchService: Verificando/Garantindo normalização dos embeddings de consulta (L2 norm)...")
             norms = np.linalg.norm(query_embeddings, axis=1, keepdims=True)
-            # Evitar divisão por zero para vetores nulos (embora improvável para embeddings de texto)
-            norms[norms == 0] = 1e-10
+            norms[norms == 0] = 1e-10 # Evitar divisão por zero
             normalized_query_embeddings = query_embeddings / norms
-            print("SearchService: Normalização concluída.")
+            print("SearchService: Normalização concluída/verificada.")
 
             # 4. Realizar a Busca Vetorial
-            # O k para a busca FAISS precisa ser um pouco maior se filtrarmos depois,
-            # para aumentar a chance de encontrar 'k' itens do tipo 'table'.
-            search_k = k * 5000 # Buscar mais para ter margem para filtrar por tipo 'table'
-            print(f"SearchService: Buscando {search_k} vizinhos mais próximos no índice FAISS...")
-            # search retorna:
-            # D: Distâncias (Squared L2 para IndexFlatL2) - shape (num_queries, search_k)
-            # I: Índices dos vizinhos no metadata_list - shape (num_queries, search_k)
+            search_k = k * 5 # Buscar um pouco mais para filtrar
+            print(f"SearchService: Buscando {search_k} vizinhos mais próximos no índice FAISS (IndexFlatIP)...")
+            # Assumindo agora que distances_sq contém DIRETAMENTE o produto interno (cosseno)
             distances_sq, indices = faiss_index.search(normalized_query_embeddings, search_k)
             print("SearchService: Busca FAISS concluída.")
 
@@ -117,53 +90,54 @@ class SearchService:
 
                 for j in range(search_k):
                     match_index = indices[i][j]
-
-                    # FAISS pode retornar -1 se houver menos de 'search_k' itens no índice total
                     if match_index == -1:
                         continue
 
-                    # Acessar metadados correspondentes
                     try:
                         match_metadata = metadata_list[match_index]
                     except IndexError:
                         print(f"SearchService WARNING: Índice {match_index} fora dos limites para metadados (Tamanho: {len(metadata_list)}). Pulando.")
                         continue
 
-                    # --- FILTRAR: Queremos apenas correspondências do tipo 'table' ---
                     if match_metadata.get('type') == 'table':
-                        # Extrair nome qualificado da tabela (schema.table)
                         schema = match_metadata.get('schema', 'unknown_schema')
                         table = match_metadata.get('name', 'unknown_table')
                         qualified_table_name = f"{schema}.{table}"
 
-                        # Calcular similaridade
-                        dist_sq = distances_sq[i][j]
-                        # Garante que cos_sim seja float padrão
-                        cos_sim = float(max(0.0, 1.0 - (dist_sq / 2.0)))
-                        similarity_calc = cos_sim * 100
+                        content_chunk = match_metadata.get('content')
 
-                        # Converte para float padrão ANTES de adicionar ao dicionário
-                        similarity_percentage = float(round(similarity_calc, 2))
+                        if content_chunk:
+                            # --- **** CORREÇÃO REVISADA APLICADA AQUI **** ---
+                            # Assumimos que distances_sq contém o cosseno diretamente.
+                            raw_cos_sim = distances_sq[i][j]
 
-                        query_result["matches"].append({
-                            "table_name": qualified_table_name,
-                            "similarity_percentage": similarity_percentage # Agora é um float padrão
-                            # ... (outros metadados se houver)
-                        })
-                        found_matches_count += 1
+                            # Clamp (limitar) entre 0.0 e 1.0 para segurança
+                            cos_sim = float(max(0.0, min(1.0, raw_cos_sim)))
 
-                        # Parar se já encontramos 'k' correspondências do TIPO TABELA
-                        if found_matches_count >= k:
-                            break
+                            # Porcentagem é cosseno * 100
+                            similarity_percentage = float(round(cos_sim * 100, 2))
+                            # --- **** FIM DA CORREÇÃO REVISADA **** ---
 
-                # Adicionar o resultado desta consulta à lista geral
-                if query_result["matches"]: # Adiciona apenas se encontrou alguma correspondência de tabela
+                            # Debug (opcional): Verificar os valores
+                            # print(f"  Debug Match: Index {match_index}, Table: {qualified_table_name}, FAISS score (dist_sq/cos_sim): {distances_sq[i][j]:.4f}, Clamped CosSim: {cos_sim:.4f}, Perc: {similarity_percentage:.2f}%")
+
+                            query_result["matches"].append({
+                                "table_name": qualified_table_name,
+                                "similarity_percentage": similarity_percentage,
+                                "content": content_chunk
+                            })
+                            found_matches_count += 1
+
+                            if found_matches_count >= k:
+                                break
+                        else:
+                            print(f"SearchService WARNING: Conteúdo não encontrado nos metadados para a tabela '{qualified_table_name}' (índice {match_index}). Match ignorado.")
+
+                if query_result["matches"]:
                     results.append(query_result)
                 else:
                     print(f"SearchService: Nenhuma correspondência do tipo 'table' encontrada para a consulta '{query_table_name}' dentro dos {search_k} vizinhos.")
-                    # Opcionalmente, adicionar um resultado vazio para indicar que a busca foi feita
                     results.append({"query_table": query_table_name, "matches": []})
-
 
             print(f"SearchService: Processamento concluído. Retornando {len(results)} resultados de consulta.")
             return results
@@ -175,4 +149,4 @@ class SearchService:
             import traceback
             print(f"SearchService CRITICAL ERROR: Erro inesperado durante a busca: {e}")
             traceback.print_exc()
-            return [] # Retorna lista vazia em caso de erro crítico
+            return []
