@@ -1,55 +1,32 @@
-from typing import Dict, Any
-from src.infrastructure.config.api.api_config import GeminiConfig
+# infrastructure/external_services/llm_service.py
+from config.api.api_config import GeminiConfig
+from config.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class LLMService:
-    """ 
-    Serviço para interagir com a LLM
     """
+    Serviço direto para processar prompts com a LLM.
+    Usa níveis pré-definidos ('fraco', 'medio', 'forte', 'extremo') e retorna apenas o texto da resposta.
+    """
+    MODELOS = {
+        "fraco": "gemini-2.0-flash-lite",
+        "medio": "gemini-2.0-flash",
+        "forte": "gemini-2.5-flash-preview-04-17",
+        "extremo": "gemini-2.5-pro-preview-05-06"
+    }
 
     @staticmethod
-    def get_api_response(prompt: str, modelo: str = 'gemini-2.0-flash'):
-        """
-        Retorna o objeto de resposta bruto da API do Gemini.
-        """
-        genai = GeminiConfig.get_client()
-        modelo_gemini = genai.GenerativeModel(modelo)
-        resposta = modelo_gemini.generate_content(prompt)
-        return resposta
-
-    @staticmethod
-    def get_usage_data(resposta_api) -> dict:
-        """
-        Extrai apenas os dados de uso (tokens, tempo, etc) da resposta da API Gemini.
-        """
-        info_uso = resposta_api._result.usage_metadata
-        return {
-            "tokens_entrada": info_uso.prompt_token_count if info_uso else "Não disponível",
-            "tokens_saida": info_uso.candidates_token_count if info_uso else "Não disponível",
-            "tokens_total": info_uso.total_token_count if info_uso else "Não disponível"
-        }
-
-    @staticmethod
-    def get_response_text(resposta_api) -> str:
-        """
-        Extrai apenas o texto da resposta da API Gemini.
-        """
-        return resposta_api.text
-
-    @staticmethod
-    def processar_prompt(prompt: str, modelo: str = 'gemini-2.0-flash') -> Dict[str, Any]:
-        """
-        (Mantido para compatibilidade) Envia um prompt e retorna resposta, uso e tempo.
-        """
-        import time
-        tempo_inicio = time.time()
-        resposta_api = LLMService.get_api_response(prompt, modelo)
-        tempo_fim = time.time()
-        tempo_resposta = tempo_fim - tempo_inicio
-
-        return {
-            "resposta": LLMService.get_response_text(resposta_api),
-            "uso": {
-                **LLMService.get_usage_data(resposta_api),
-                "tempo_resposta": f"{tempo_resposta:.2f} segundos"
-            }
-        }
+    def processar_prompt(prompt: str, nivel_modelo: str = "medio") -> str:
+        nivel = nivel_modelo.lower()
+        modelo = LLMService.MODELOS.get(nivel, LLMService.MODELOS["medio"])
+        
+        logger.info(f"\n[LLM SERVICE] Enviando prompt para o modelo: {modelo} (nível: {nivel})")
+        
+        try:
+            genai = GeminiConfig.get_client()
+            resposta = genai.GenerativeModel(modelo).generate_content(prompt)
+            return resposta.text if hasattr(resposta, 'text') else ""
+        except Exception as e:
+            logger.error(f"\n[LLM SERVICE] Erro ao processar prompt: {e}")
+            return ""

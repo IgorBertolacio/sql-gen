@@ -1,0 +1,38 @@
+[2025-05-06 09:28:43] INFO  | config.core.logging_config:241 | Sistema de logs inicializado com nível global: INFO
+[2025-05-06 09:28:43] INFO  | __main__:33 | Iniciando servidor na porta 5000
+[2025-05-06 09:28:43] INFO  | __main__:34 | Pressione CTRL+C para encerrar
+[2025-05-06 09:28:43] INFO  | __main__:38 | Ambiente: development
+[2025-05-06 09:28:43] INFO  | interfaces.api.llm_controller:59 | Iniciando servidor Flask em 0.0.0.0:5000 (Debug: True)
+[2025-05-06 09:28:43] INFO  | werkzeug:97 | [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://100.64.2.3:5000
+[2025-05-06 09:28:43] INFO  | werkzeug:97 | [33mPress CTRL+C to quit[0m
+[2025-05-06 09:28:43] INFO  | werkzeug:97 |  * Restarting with stat
+[2025-05-06 09:28:44] INFO  | config.core.logging_config:241 | Sistema de logs inicializado com nível global: INFO
+[2025-05-06 09:28:44] INFO  | __main__:33 | Iniciando servidor na porta 5000
+[2025-05-06 09:28:44] INFO  | __main__:34 | Pressione CTRL+C para encerrar
+[2025-05-06 09:28:44] INFO  | __main__:38 | Ambiente: development
+[2025-05-06 09:28:44] INFO  | interfaces.api.llm_controller:59 | Iniciando servidor Flask em 0.0.0.0:5000 (Debug: True)
+[2025-05-06 09:28:44] WARNING | werkzeug:97 |  * Debugger is active!
+[2025-05-06 09:28:44] INFO  | werkzeug:97 |  * Debugger PIN: 109-704-210
+[2025-05-06 09:31:31] INFO  | werkzeug:97 |  * Detected change in 'C:\\RAG\\workspace\\STEVIA\\SQL-GENERATE\\src\\config\\core\\logging_config.py', reloading
+[2025-05-06 09:31:32] INFO  | werkzeug:97 |  * Restarting with stat
+[2025-05-06 09:31:34] INFO  | config.core.logging_config:267 | Sistema de logs inicializado com nível global: INFO
+[2025-05-06 09:31:34] INFO  | __main__:33 | Iniciando servidor na porta 5000
+[2025-05-06 09:31:34] INFO  | __main__:34 | Pressione CTRL+C para encerrar
+[2025-05-06 09:31:34] INFO  | __main__:38 | Ambiente: development
+[2025-05-06 09:31:34] INFO  | interfaces.api.llm_controller:59 | Iniciando servidor Flask em 0.0.0.0:5000 (Debug: True)
+[2025-05-06 09:31:34] WARNING | werkzeug:97 |  * Debugger is active!
+[2025-05-06 09:31:34] INFO  | werkzeug:97 |  * Debugger PIN: 109-704-210
+[2025-05-06 09:32:21] INFO  | werkzeug:97 |  * Detected change in 'C:\\RAG\\workspace\\STEVIA\\SQL-GENERATE\\src\\interfaces\\api\\run_api.py', reloading
+[2025-05-06 09:32:21] INFO  | werkzeug:97 |  * Restarting with stat
+[2025-05-06 09:32:23] INFO  | config.core.logging_config:267 | Sistema de logs inicializado com nível global: INFO
+[2025-05-06 09:32:23] INFO  | __main__:37 | Iniciando servidor na porta 5000
+[2025-05-06 09:32:23] INFO  | __main__:38 | Pressione CTRL+C para encerrar
+[2025-05-06 09:32:23] INFO  | __main__:42 | Ambiente: development
+[2025-05-06 09:32:23] INFO  | interfaces.api.llm_controller:59 | Iniciando servidor Flask em 0.0.0.0:5000 (Debug: True)
+[2025-05-06 09:32:23] WARNING | werkzeug:97 |  * Debugger is active!
+[2025-05-06 09:32:23] INFO  | werkzeug:97 |  * Debugger PIN: 109-704-210
+[2025-05-06 09:35:35] INFO  | werkzeug:97 |  * Detected change in 'C:\\RAG\\workspace\\STEVIA\\SQL-GENERATE\\src\\interfaces\\api\\run_api.py', reloading
+[2025-05-06 09:35:36] INFO  | werkzeug:97 |  * Restarting with stat
