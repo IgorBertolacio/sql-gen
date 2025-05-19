@@ -107,7 +107,6 @@ class BaseInstructions:
             deve retornar somente esse numero e anda mais
             ]
             
-            SEMPRE PEÇA A TABELA el_cpe_ex.ct_documento caso já nao tenha ela no contexto
             O NOME DO CAMPO CONTIDO NO METADADO DEVE SER IDENTICO OA QUE O USUARIO MANDOU, CASO não tenha essa similaridade retorne 1001 e continue procurante ate achar
             Assim que vc encontrar o tudo que precisa para fazer exatamente que o usario quer vc deve parar e retornar 2002
             Evite ficar olhando em mais tabelas se ja tiver tudo que precisa
@@ -139,6 +138,34 @@ class BaseInstructions:
 
             EXEMPLO DE RESPOSTA ERRADA
             [numero;tabelas_mantidas;tabelas_solicitadas;motivo]
+
+            
+            DICIONARIO DE APOIO - Vc nao deve usar em todos os casos somente em casos que a pergunta do usuario se aplica
+
+            Sempre que uma tabela contiver uma chave estrangeira (FK) para a tabela ct_documento por meio de uma coluna chamada id, o sistema deve seguir obrigatoriamente a seguinte lógica:
+
+            JOIN direto da tabela de origem com ct_documento
+
+            sql
+            Copiar código
+            <tabela_origem>.id = ct_documento.id
+            JOIN com documento_item utilizando a coluna id_documento
+
+            sql
+            Copiar código
+            documento_item.id_documento = ct_documento.id
+            Sempre buscar os valores desejados exclusivamente a partir da tabela documento_item — mesmo que os campos existam em ct_documento.
+
+            Todos os campos da tabela ct_documento e da tabela documento_item devem ser considerados como se pertencessem à tabela de origem. Isso significa que, para fins de geração de SELECT, filtragem ou exibição, qualquer coluna de ct_documento ou documento_item pode ser referenciada como se fizesse parte da estrutura da tabela original.
+
+            Resumo prático da lógica relacional:
+
+            text
+            Copiar código
+            <tabela_origem>.id = ct_documento.id  
+            JOIN documento_item.id_documento = ct_documento.id  
+            ⇒ buscar sempre os valores em documento_item  
+            ⇒ considerar todos os campos de ct_documento e documento_item como parte da tabela origem
             
        
         """
@@ -152,6 +179,8 @@ class BaseInstructions:
         """
         return """
 
+            COMO PARTE DE UM SISTEMA DE RAG VC DEVE SER CAPAZ DE USAR SOMENTE DADOS RELEVANTES PARA SUA GERAÇÃO DE RESPOSTA, VC DEVEL ELIMINAR RUIDO E NAO USAR DADOS QUE VC CONSIDERAR IRRELEVANTE PARA A RESPOSTA FINAL DO USUARIO
+            VOCÊ DEVE SEMPRE OLHAR AS TABELAS QUE VC TEM NO CONTEXTO, 
             NUNCA USE NOMES DE COLUNAS QUE NAO EXISTAM, VOCE NAO PODE COMETER O ERRO DE USAR COLUNAS QUE NAO SAO REAIS
             SUA RESPOSTA DEVE SER ESTRUTURADA EM TOPICOS COM EMOJIS E USANDO MARKDOWN PARA DEIXAR TUDO ORGANIZADO
             Você nunca deve colocar na sua respostas colunas que vc não tenha certeza absulota que é uma coluna real na tabela que vc esta referenciando
@@ -179,5 +208,35 @@ class BaseInstructions:
             
             O NOME DO CAMPO CONTIDO NO METADADO DEVE SER IDENTICO OA QUE O USUARIO MANDOU, CASO não ache um identico use com o nome mais similar mesmo que tenha que fazer join com varias outras tabelas para usar aquele campo
             E LEMBRESE - VOCÊ NAO PODE INVENTAR JOINS NEM NADA tudo teve ser baseado nos metadados
+            RETORNE AS TABELAS QUE FORAM USADAS PARA GERAR SUA RESPOSTA, TANTO AS TABELAS QUE VC USOU PARA GERAR O SQL QUNATO AS OUTRAS QUE VC TEVE NO CONTEXTO, COLOQUE EM LISTA NO FORMATO MARKDOWN
+            Você deve rotornar tabem uma lsita de tabels que vc teve acesso para gerar sua resposta, mesmo que vc nao tenha usado elas deve falar que teve acesso a elas
+            DICIONARIO PARA CONSULTA
+
+            DICIONARIO DE APOIO - Vc nao deve usar em todos os casos somente em casos que a pergunta do usuario se aplica 
+
+            Sempre que uma tabela contiver uma chave estrangeira (FK) para a tabela ct_documento por meio de uma coluna chamada id, o sistema deve seguir obrigatoriamente a seguinte lógica:
+
+            JOIN direto da tabela de origem com ct_documento
+
+            sql
+            Copiar código
+            <tabela_origem>.id = ct_documento.id
+            JOIN com documento_item utilizando a coluna id_documento
+
+            sql
+            Copiar código
+            documento_item.id_documento = ct_documento.id
+            Sempre buscar os valores desejados exclusivamente a partir da tabela documento_item — mesmo que os campos existam em ct_documento.
+
+            Todos os campos da tabela ct_documento e da tabela documento_item devem ser considerados como se pertencessem à tabela de origem. Isso significa que, para fins de geração de SELECT, filtragem ou exibição, qualquer coluna de ct_documento ou documento_item pode ser referenciada como se fizesse parte da estrutura da tabela original.
+
+            Resumo prático da lógica relacional:
+
+            text
+            Copiar código
+            <tabela_origem>.id = ct_documento.id  
+            JOIN documento_item.id_documento = ct_documento.id  
+            ⇒ buscar sempre os valores em documento_item  
+            ⇒ considerar todos os campos de ct_documento e documento_item como parte da tabela origem
 
     """

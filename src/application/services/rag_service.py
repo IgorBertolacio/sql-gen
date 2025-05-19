@@ -1,7 +1,10 @@
+# src/application/services/rag_service.py
+
 from typing import Dict, Any, List
 from application.services.maestro.extraction_manager import ExtractionManager
 from application.services.maestro.embedding_manager import EmbeddingManager
-from application.services.maestro.search_manager import SearchManager
+from infrastructure.vector_database.search_service import SearchService
+from application.services.maestro.filter_tables import FilterTables
 from config.core.logging_config import setup_logging, get_logger
 
 setup_logging(profile="api_server")
@@ -11,155 +14,147 @@ class RAGService:
 
     @staticmethod
     def generate_sql_from_prompt(prompt_usuario: str) -> Dict[str, Any]:
-        # Variáveis para controlar o loop
         max_iteracoes = 10
         iteracao_atual = 0
-        tabelas_acumuladas = []
-        tabelas_mantidas_acumuladas = []  # Lista para armazenar todas as tabelas mantidas com seus metadados
+        tabelas_mantidas_acumuladas: List[Dict[str, Any]] = []
         resposta_final = None
-        
-        # Etapa 1: Recebe o prompt do usuario
-        logger.info(f"\n[RAG SERVICE]\n Prompt recebido do usuário: '{prompt_usuario}'")
-        
-        # Loop principal - continua até obter código 2002 ou atingir o máximo de iterações
+        tabelas_a_buscar: List[str] = []
+
+        logger.info(f"\n[RAG SERVICE] Prompt recebido: '{prompt_usuario}'")
+
         while iteracao_atual <= max_iteracoes:
-            logger.info(f"\n[RAG SERVICE]\n Iniciando iteração {iteracao_atual + 1} de {max_iteracoes + 1}")
-            
-            # Etapa 2: Passa o prompt para o ExtractionManager extrair entidades
-            # Na primeira iteração, usa o prompt original. Nas seguintes, adiciona as tabelas solicitadas
+            logger.info(f"\n[RAG SERVICE] Iteração {iteracao_atual + 1}/{max_iteracoes + 1}")
+
+            tabelas_extraidas_nesta_iteracao: List[str]
             if iteracao_atual == 0:
-                logger.info(f"\n[RAG SERVICE]\n Passando prompt para o ExtractionManager com modelo medio")
+                logger.info(f"\n[RAG SERVICE] Extraindo entidades do prompt inicial")
                 resultado_extracao = ExtractionManager.extract_entities_from_prompt(prompt_usuario, nivel_modelo="medio")
-                tabelas_extraidas = resultado_extracao.get("tabelas", [])
+                tabelas_extraidas_nesta_iteracao = resultado_extracao.get("tabelas", [])
             else:
-                # Nas iterações seguintes, usa as tabelas solicitadas da iteração anterior
-                logger.info(f"\n[RAG SERVICE]\n Usando tabelas solicitadas da iteração anterior: {tabelas_solicitadas}")
-                tabelas_extraidas = tabelas_solicitadas
-            
-            # Adiciona as tabelas extraídas às acumuladas (evitando duplicatas)
-            for tabela in tabelas_extraidas:
-                if tabela not in tabelas_acumuladas:
-                    tabelas_acumuladas.append(tabela)
-                logger.info(f"\n[RAG SERVICE] Tabelas mantidas acumuladas: {[t.get('table_name') for t in tabelas_mantidas_acumuladas]}")
-                logger.info(f"\n[RAG SERVICE] Número de tabelas acumuladas: {len(tabelas_mantidas_acumuladas)}")
+                logger.info(f"\n[RAG SERVICE] Usando tabelas solicitadas da iteração anterior: {tabelas_a_buscar}")
+                tabelas_extraidas_nesta_iteracao = tabelas_a_buscar
 
-            # Verificar se todas as tabelas mantidas têm conteúdo
-            for tabela in tabelas_mantidas_acumuladas:
-                if not tabela.get("content"):
-                    logger.warning(f"\n[RAG SERVICE] Tabela sem conteúdo: {tabela.get('table_name')}")
+            resultados_busca_atual: List[Dict[str, Any]] = []
+            if tabelas_extraidas_nesta_iteracao:
+                logger.info(f"\n[RAG SERVICE] Gerando embeddings para: {tabelas_extraidas_nesta_iteracao}")
+                resultado_embeddings = EmbeddingManager.generate_embeddings_for_tables(tabelas_extraidas_nesta_iteracao)
+                embeddings_gerados = resultado_embeddings.get("embeddings")
 
-            # Etapa 3: Gera embeddings para as tabelas extraídas
-            logger.info(f"\n[RAG SERVICE]\n Gerando embeddings para {len(tabelas_extraidas)} tabelas extraídas")
-            resultado_embeddings = EmbeddingManager.generate_embeddings_for_tables(tabelas_extraidas)
+                if embeddings_gerados is not None and embeddings_gerados.size > 0:
+                    logger.info(f"\n[RAG SERVICE] Buscando tabelas similares")
+                    resultados_busca_atual = SearchService.find_top_similar_tables(
+                        query_embeddings=embeddings_gerados,
+                        query_table_names=tabelas_extraidas_nesta_iteracao,
+                        k=5 # Ajuste o k conforme necessário
+                    )
+                else:
+                    logger.warning(f"\n[RAG SERVICE] Nenhum embedding gerado para {tabelas_extraidas_nesta_iteracao}. Pulando busca.")
+            else:
+                logger.info(f"\n[RAG SERVICE] Nenhuma tabela para buscar nesta iteração.")
 
-            # Etapa 4: Busca tabelas similares usando os embeddings gerados
-            logger.info(f"\n[RAG SERVICE]\n Buscando tabelas similares usando embeddings")
-            embeddings_gerados = resultado_embeddings.get("embeddings")
-            resultado_busca = SearchManager.find_similar_tables(
-                query_embeddings=embeddings_gerados,
-                table_names=tabelas_extraidas)
 
-            # Etapa 5: Verificar se os dados encontrados são suficientes para responder à pergunta
-            logger.info(f"\n[RAG SERVICE]\n Enviados dados para verificação")
-            resultados_similares = resultado_busca.get("resultados", [])
+            # Contexto para verificação: tabelas da busca atual + tabelas já mantidas
+            # `verify_data_sufficiency` espera uma lista de resultados de busca,
+            # então precisamos formatar `tabelas_mantidas_acumuladas` se quisermos incluí-las diretamente.
+            # Por ora, `verify_data_sufficiency` parece analisar apenas a nova leva de tabelas (`resultados_busca_atual`).
+            # Se a intenção é que a LLM analise *todo* o contexto acumulado,
+            # `tabelas_para_verificacao` deve agregar `resultados_busca_atual` e `tabelas_mantidas_acumuladas`
+            # em um formato que `verify_data_sufficiency` entenda.
 
-            # Chamar o ExtractionManager para verificar se os dados são suficientes
+            # Para simplificar, vamos assumir que `verify_data_sufficiency` analisa o contexto da busca atual
+            # e `ExtractionManager.final_response` usa `tabelas_mantidas_acumuladas`.
+            tabelas_para_verificacao = resultados_busca_atual
+
+            logger.info(f"\n[RAG SERVICE] Verificando suficiência dos dados. Contexto para LLM (apenas busca atual): {len(tabelas_para_verificacao)} resultados.")
             resultado_verificacao = ExtractionManager.verify_data_sufficiency(
                 prompt_usuario=prompt_usuario,
-                tabelas_similares=resultados_similares
+                tabelas_similares=tabelas_para_verificacao # Passa os resultados da busca mais recente
             )
 
-            # Processar o resultado da verificação
-            codigo = resultado_verificacao.get('codigo')
-            
-            if codigo == '2002':
-                logger.info(f"\n[RAG SERVICE] Dados suficientes para responder à pergunta.")
-                
-                # Adicionar todas as tabelas aos resultados mantidos
-                for resultado in resultados_similares:
-                    matches = resultado.get("matches", [])
-                    for match in matches:
-                        # Adiciona à lista de tabelas mantidas acumuladas
-                        tabelas_mantidas_acumuladas.append({
-                            "table_name": match.get("table_name", ""),
-                            "similarity_percentage": match.get("similarity_percentage", 0),
-                            "content": match.get("content", "")
-                        })
-                
-                # Gerar resposta final com todas as tabelas mantidas acumuladas
+            codigo_verificacao = resultado_verificacao.get('codigo')
+
+            if codigo_verificacao == '2002':
+                logger.info(f"\n[RAG SERVICE] Dados suficientes. Gerando resposta final.")
+                # Adiciona os "matches" da última busca às tabelas mantidas, se houver
+                for resultado_busca in resultados_busca_atual: # `resultados_busca_atual` é List[Dict]
+                    for match in resultado_busca.get("matches", []):
+                         # Evitar duplicatas em tabelas_mantidas_acumuladas
+                        if not any(t.get("table_name") == match.get("table_name") for t in tabelas_mantidas_acumuladas):
+                            tabelas_mantidas_acumuladas.append(match)
+
                 resposta_final = ExtractionManager.final_response(
                     prompt_usuario=prompt_usuario,
-                    resultados_similares=tabelas_mantidas_acumuladas,
+                    resultados_similares=tabelas_mantidas_acumuladas, # Usa todas as tabelas acumuladas
                     nivel_modelo="forte"
                 )
-                
-                logger.info(f"\n[RAG SERVICE] Resposta final gerada com sucesso.")
-                # Sai do loop quando obtém dados suficientes
+                logger.info(f"\n[RAG SERVICE] Resposta final gerada.")
                 break
-                
-            elif codigo == '1001':
-                tabelas_mantidas = resultado_verificacao.get('tabelas_mantidas', [])
-                tabelas_solicitadas = resultado_verificacao.get('tabelas_solicitadas', [])
+
+            elif codigo_verificacao == '1001':
+                tabelas_mantidas_pela_llm = resultado_verificacao.get('tabelas_mantidas', [])
+                tabelas_solicitadas_pela_llm = resultado_verificacao.get('tabelas_solicitadas', [])
                 motivo = resultado_verificacao.get('motivo', '')
-                
-                logger.info(f"\n[RAG SERVICE] Necessário buscar tabelas adicionais (iteração {iteracao_atual + 1}).")
-                logger.info(f"\n[RAG SERVICE] Tabelas mantidas: {tabelas_mantidas}")
-                logger.info(f"\n[RAG SERVICE] Tabelas solicitadas: {tabelas_solicitadas}")
-                logger.info(f"\n[RAG SERVICE] Motivo: {motivo}")
-                
-                # Adicionar tabelas mantidas à lista acumulada
-                from application.services.maestro.filter_tables import FilterTables
-                tabelas_filtradas = FilterTables.filtrar_tabelas_mantidas(tabelas_mantidas, resultados_similares)
-                
-                # Adiciona as tabelas filtradas à lista acumulada
-                for tabela in tabelas_filtradas:
-                    # Verifica se a tabela já existe na lista acumulada
-                    existe = False
-                    for t in tabelas_mantidas_acumuladas:
-                        if t.get("table_name") == tabela.get("table_name"):
-                            existe = True
-                            break
-                    
-                    # Se não existe, adiciona
-                    if not existe:
-                        tabelas_mantidas_acumuladas.append(tabela)
-                
+
+                logger.info(f"\n[RAG SERVICE] LLM solicitou mais tabelas. Mantidas: {tabelas_mantidas_pela_llm}, Solicitadas: {tabelas_solicitadas_pela_llm}. Motivo: {motivo}")
+
+                # Filtra e adiciona as tabelas que a LLM decidiu manter DA BUSCA ATUAL
+                tabelas_filtradas_da_busca_atual = FilterTables.filtrar_tabelas_mantidas(
+                    tabelas_mantidas_pela_llm,
+                    resultados_busca_atual # Filtra dos resultados da busca corrente
+                )
+
+                for tabela_filtrada in tabelas_filtradas_da_busca_atual:
+                    if not any(t.get("table_name") == tabela_filtrada.get("table_name") for t in tabelas_mantidas_acumuladas):
+                        tabelas_mantidas_acumuladas.append(tabela_filtrada)
+
                 logger.info(f"\n[RAG SERVICE] Tabelas mantidas acumuladas: {[t.get('table_name') for t in tabelas_mantidas_acumuladas]}")
-                
-                # Verifica se atingiu o máximo de iterações
-                if iteracao_atual == max_iteracoes:
-                    logger.warning(f"\n[RAG SERVICE] Atingido o número máximo de iterações ({max_iteracoes + 1}). Gerando resposta com os dados disponíveis.")
-                    
-                    # Gerar resposta final com os dados disponíveis, mesmo que incompletos
+                tabelas_a_buscar = tabelas_solicitadas_pela_llm
+
+                if not tabelas_a_buscar: # LLM pediu para manter, mas não solicitou novas. Evita loop infinito.
+                    logger.warning("\n[RAG SERVICE] LLM não solicitou novas tabelas, mas não retornou 2002. Forçando resposta final.")
                     resposta_final = ExtractionManager.final_response(
                         prompt_usuario=prompt_usuario,
                         resultados_similares=tabelas_mantidas_acumuladas,
                         nivel_modelo="forte"
                     )
-                    
-                    logger.info(f"\n[RAG SERVICE] Resposta final gerada com dados parciais.")
                     break
-            else:
-                logger.warning(f"\n[RAG SERVICE] Erro na verificação: {resultado_verificacao.get('motivo')}")
-                # Em caso de erro, tenta gerar uma resposta com os dados disponíveis
+
+                if iteracao_atual == max_iteracoes:
+                    logger.warning(f"\n[RAG SERVICE] Máximo de iterações atingido. Gerando resposta com dados disponíveis.")
+                    resposta_final = ExtractionManager.final_response(
+                        prompt_usuario=prompt_usuario,
+                        resultados_similares=tabelas_mantidas_acumuladas,
+                        nivel_modelo="forte"
+                    )
+                    break
+            else: # Erro na verificação ou código desconhecido
+                logger.error(f"\n[RAG SERVICE] Erro na verificação da LLM ou código desconhecido: {resultado_verificacao.get('motivo', 'Resposta inválida')}")
                 resposta_final = ExtractionManager.final_response(
                     prompt_usuario=prompt_usuario,
-                    resultados_similares=tabelas_mantidas_acumuladas if tabelas_mantidas_acumuladas else resultados_similares,
+                    resultados_similares=tabelas_mantidas_acumuladas, # Tenta com o que tem
                     nivel_modelo="forte"
                 )
-                logger.info(f"\n[RAG SERVICE] Resposta final gerada com dados disponíveis após erro.")
+                logger.info(f"\n[RAG SERVICE] Resposta final gerada após erro na verificação.")
                 break
-            
-            # Incrementa o contador de iterações
+
             iteracao_atual += 1
-        
-        # Se chegou aqui sem resposta final (caso improvável), gera uma resposta de erro
+
         if resposta_final is None:
-            resposta_final = "Não foi possível gerar uma resposta para a sua pergunta com os dados disponíveis."
+            logger.error("\n[RAG SERVICE] Nenhuma resposta final foi gerada após o loop. Isso não deveria acontecer.")
+            # Fallback para uma resposta genérica de erro ou com o contexto que tiver
+            if tabelas_mantidas_acumuladas:
+                logger.info("\n[RAG SERVICE] Tentando gerar resposta final com tabelas acumuladas como último recurso.")
+                resposta_final = ExtractionManager.final_response(
+                    prompt_usuario=prompt_usuario,
+                    resultados_similares=tabelas_mantidas_acumuladas,
+                    nivel_modelo="forte"
+                )
+            else:
+                resposta_final = "Não foi possível gerar uma resposta para a sua pergunta com as informações disponíveis após múltiplas tentativas."
 
         return {
-            "sucesso": True,
-            "sql_gerado_final": resposta_final,
-            "resposta_texto": "Resposta gerada com sucesso.",
+            "sucesso": True, # O RAGService em si completou, a qualidade da resposta depende da LLM
+            "sql_gerado_final": resposta_final, # Este campo deve conter a resposta final da LLM
+            "resposta_texto": "Processamento RAG concluído.", # Mensagem genérica
             "erro": None
         }

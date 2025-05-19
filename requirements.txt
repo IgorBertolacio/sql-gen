@@ -5,3 +5,5 @@ flask-cors
 NumPy
 faiss-cpu
 typing
+qdrant-client
+
